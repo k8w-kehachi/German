@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ドイツ語テスト対策アプリ</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 560px;
+      margin: 24px auto;
+      padding: 0 16px;
+      background-color: #f5f7fa;
+      color: #333;
+    }
+    .card {
+      background: #fff;
+      padding: 24px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    select {
+      width: 100%;
+      padding: 10px;
+      font-size: 0.95rem;
+      border: 2px solid #e2e8f0;
+      border-radius: 8px;
+      background-color: #fff;
+      font-weight: bold;
+      color: #1e293b;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: #64748b;
+      margin-bottom: 18px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+    .badge {
+      display: inline-block;
+      background: #e0e7ff;
+      color: #3730a3;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+    .badge-sub {
+      background: #fef3c7;
+      color: #92400e;
+    }
+    .question {
+      font-size: 1.5rem;
+      font-weight: bold;
+      margin: 14px 0 6px;
+    }
+    .sub-hint {
+      font-size: 0.95rem;
+      color: #64748b;
+      margin-bottom: 18px;
+    }
+    .input-group {
+      margin-bottom: 12px;
+    }
+    .input-label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: bold;
+      color: #475569;
+      margin-bottom: 4px;
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 11px;
+      font-size: 1rem;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      box-sizing: border-box;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: #4f46e5;
+    }
+    .umlaut-bar {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .umlaut-btn {
+      flex: 1;
+      min-width: 40px;
+      padding: 8px 0;
+      font-size: 1rem;
+      font-weight: bold;
+      background-color: #f1f5f9;
+      color: #1e293b;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .umlaut-btn:hover { background-color: #e2e8f0; }
+    .gender-btns {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .gender-btn {
+      padding: 10px;
+      font-size: 1rem;
+      font-weight: bold;
+      background-color: #f8fafc;
+      color: #334155;
+      border: 2px solid #cbd5e1;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .gender-btn.selected {
+      background-color: #4f46e5;
+      color: #fff;
+      border-color: #4f46e5;
+    }
+    .action-btn {
+      width: 100%;
+      padding: 12px;
+      font-size: 1rem;
+      font-weight: bold;
+      color: #fff;
+      background-color: #4f46e5;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .action-btn:hover { background-color: #4338ca; }
+    .next-btn { background-color: #10b981; margin-top: 10px; }
+    .next-btn:hover { background-color: #059669; }
+    .result {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 8px;
+      font-weight: bold;
+      line-height: 1.5;
+    }
+    .correct { background-color: #d1fae5; color: #065f46; }
+    .incorrect { background-color: #fee2e2; color: #991b1b; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div class="card">
+  <!-- モード＆Unit選択 -->
+  <div class="controls">
+    <select id="mode-select" onchange="onFilterChange()">
+      <option value="vocab">単語（和独・独和ランダム）</option>
+      <option value="noun">名詞（定冠詞・複数形）</option>
+      <option value="verb">動詞（過去形・過去分詞）</option>
+    </select>
+    <select id="unit-select" onchange="onFilterChange()">
+      <option value="ALL">すべてのUnit</option>
+    </select>
+  </div>
+
+  <!-- 成績表示 -->
+  <div class="stats">
+    <span>回答数: <strong id="total-count">0</strong></span>
+    <span>正解数: <strong id="correct-count">0</strong></span>
+    <span>正答率: <strong id="accuracy">0%</strong></span>
+  </div>
+
+  <div id="loading">問題を読み込み中...</div>
+
+  <div id="quiz-area" class="hidden">
+    <div>
+      <span class="badge" id="unit-badge">Unit -</span>
+      <span class="badge badge-sub" id="direction-badge">出題形式</span>
+    </div>
+    <div class="question" id="question-text"></div>
+    <div class="sub-hint" id="sub-hint"></div>
+
+    <!-- 特殊文字入力バー -->
+    <div class="umlaut-bar">
+      <button type="button" class="umlaut-btn" onclick="insertChar('ä')">ä</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('ö')">ö</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('ü')">ü</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('ß')">ß</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('Ä')">Ä</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('Ö')">Ö</button>
+      <button type="button" class="umlaut-btn" onclick="insertChar('Ü')">Ü</button>
+    </div>
+
+    <!-- 1. 単語モード用入力 -->
+    <div id="vocab-inputs" class="input-group">
+      <input type="text" id="vocab-answer" placeholder="回答を入力..." autocomplete="off">
+    </div>
+
+    <!-- 2. 名詞モード用入力 -->
+    <div id="noun-inputs" class="hidden">
+      <span class="input-label">定冠詞（性）を選択</span>
+      <div class="gender-btns">
+        <button type="button" class="gender-btn" onclick="selectGender('der', this)">der (男)</button>
+        <button type="button" class="gender-btn" onclick="selectGender('die', this)">die (女)</button>
+        <button type="button" class="gender-btn" onclick="selectGender('das', this)">das (中)</button>
+      </div>
+      <div class="input-group">
+        <label class="input-label" for="noun-plural">複数形（定冠詞 die を含めて入力）</label>
+        <input type="text" id="noun-plural" placeholder="例: die Äpfel" autocomplete="off">
+      </div>
+    </div>
+
+    <!-- 3. 動詞モード用入力 -->
+    <div id="verb-inputs" class="hidden">
+      <div class="input-group">
+        <label class="input-label" for="verb-past">過去形</label>
+        <input type="text" id="verb-past" placeholder="例: ging" autocomplete="off">
+      </div>
+      <div class="input-group">
+        <label class="input-label" for="verb-participle">過去分詞形</label>
+        <input type="text" id="verb-participle" placeholder="例: gegangen" autocomplete="off">
+      </div>
+    </div>
+
+    <button id="submit-btn" class="action-btn" onclick="checkAnswer()">回答する</button>
+    <div id="result-area" class="result hidden"></div>
+    <button id="next-btn" class="action-btn next-btn hidden" onclick="nextQuestion()">次の問題へ</button>
+  </div>
+</div>
+
+<script>
+  // ★ここにそれぞれのシートのCSV公開URLを貼り付ける
+  const WORDS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=0&single=true&output=csv";
+  const VERBS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=2120875845&single=true&output=csv";
+
+  let allWords = [];
+  let allNouns = [];
+  let allVerbs = [];
+  let filteredList = [];
+
+  let currentQuestion = null;
+  let isJaToDe = true;
+  let selectedGender = "";
+  let activeInput = null;
+
+  let totalCount = 0;
+  let correctCount = 0;
+
+  // フォーカスされているinputを記録（特殊文字ボタン用）
+  document.querySelectorAll('input[type="text"]').forEach(input => {
+    input.addEventListener('focus', () => activeInput = input);
+  });
+
+  // カーソル位置にドイツ語特殊文字を挿入
+  function insertChar(char) {
+    if (!activeInput || activeInput.disabled) {
+      // 未選択時は表示中の最初のinputを対象にする
+      const visibleInputs = Array.from(document.querySelectorAll('input[type="text"]'))
+        .filter(el => el.offsetParent !== null && !el.disabled);
+      if (visibleInputs.length > 0) activeInput = visibleInputs[0];
+      else return;
+    }
+    const start = activeInput.selectionStart;
+    const end = activeInput.selectionEnd;
+    const text = activeInput.value;
+    activeInput.value = text.substring(0, start) + char + text.substring(end);
+    activeInput.focus();
+    activeInput.setSelectionRange(start + char.length, start + char.length);
+  }
+
+  // 名詞の定冠詞ボタン選択
+  function selectGender(gender, btnElement) {
+    selectedGender = gender;
+    document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
+    btnElement.classList.add('selected');
+  }
+
+  // CSVパース関数
+  function parseCSV(text) {
+    const lines = text.trim().split(/\r?\n/);
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(s => s.replace(/^"|"$/g, '').trim());
+      if (cols.length >= 2 && cols[0] && cols[1]) {
+        rows.push(cols);
+      }
+    }
+    return rows;
+  }
+
+  // 初期データ読み込み
+  async function init() {
+    try {
+      const [wordsRes, verbsRes] = await Promise.all([
+        fetch(WORDS_CSV_URL),
+        fetch(VERBS_CSV_URL)
+      ]);
+
+      const wordsRows = parseCSV(await wordsRes.text());
+      const verbsRows = parseCSV(await verbsRes.text());
+
+      // 単語データの整形
+      allWords = wordsRows.map(c => ({
+        german: c[0],
+        japanese: c[1],
+        plural: c[2] || "",
+        unit: c[3] || "出典なし"
+      }));
+
+      // 名詞データの抽出（der / die / das で始まり、複数形が登録されているもの）
+      allNouns = allWords
+        .filter(w => /^(der|die|das)\s+/i.test(w.german) && w.plural !== "")
+        .map(w => {
+          const match = w.german.match(/^(der|die|das)\s+(.+)$/i);
+          return {
+            article: match[1].toLowerCase(),
+            word: match[2],
+            full: w.german,
+            japanese: w.japanese,
+            plural: w.plural,
+            unit: w.unit
+          };
+        });
+
+      // 動詞データの整形
+      allVerbs = verbsRows.map(c => ({
+        infinitive: c[0],
+        japanese: c[1],
+        past: c[2] || "",
+        participle: c[3] || "",
+        unit: c[4] || "出典なし"
+      }));
+
+      document.getElementById("loading").classList.add("hidden");
+      document.getElementById("quiz-area").classList.remove("hidden");
+
+      updateUnitOptions();
+      onFilterChange();
+    } catch (error) {
+      document.getElementById("loading").textContent = "データの読み込みに失敗しました。2つのCSV URLを確認してください。";
+      console.error(error);
+    }
+  }
+
+  // モードに応じてUnitドロップダウンの選択肢を更新
+  function updateUnitOptions() {
+    const mode = document.getElementById("mode-select").value;
+    const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
+    const units = [...new Set(source.map(item => item.unit))].sort();
+
+    const unitSelect = document.getElementById("unit-select");
+    const currentUnit = unitSelect.value;
+    unitSelect.innerHTML = '<option value="ALL">すべてのUnit</option>';
+    units.forEach(u => {
+      const opt = document.createElement("option");
+      opt.value = u;
+      opt.textContent = u;
+      unitSelect.appendChild(opt);
+    });
+
+    if (units.includes(currentUnit)) {
+      unitSelect.value = currentUnit;
+    }
+  }
+
+  // モードまたはUnit変更時の処理
+  function onFilterChange() {
+    const mode = document.getElementById("mode-select").value;
+    // モード切替時にUnit一覧も更新
+    updateUnitOptions();
+    const selectedUnit = document.getElementById("unit-select").value;
+
+    const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
+    filteredList = selectedUnit === "ALL"
+      ? source
+      : source.filter(item => item.unit === selectedUnit);
+
+    nextQuestion();
+  }
+
+  // 次の問題を出題
+  function nextQuestion() {
+    const mode = document.getElementById("mode-select").value;
+
+    // 入力欄の表示切り替え
+    document.getElementById("vocab-inputs").classList.toggle("hidden", mode !== "vocab");
+    document.getElementById("noun-inputs").classList.toggle("hidden", mode !== "noun");
+    document.getElementById("verb-inputs").classList.toggle("hidden", mode !== "verb");
+
+    document.getElementById("result-area").classList.add("hidden");
+    document.getElementById("next-btn").classList.add("hidden");
+
+    if (filteredList.length === 0) {
+      document.getElementById("unit-badge").textContent = "-";
+      document.getElementById("direction-badge").textContent = "データなし";
+      document.getElementById("question-text").textContent = "該当する問題がありません";
+      document.getElementById("sub-hint").textContent = "スプレッドシートのデータまたはUnit選択を確認してください。";
+      document.getElementById("submit-btn").classList.add("hidden");
+      return;
+    }
+
+    document.getElementById("submit-btn").classList.remove("hidden");
+    const randomIndex = Math.floor(Math.random() * filteredList.length);
+    currentQuestion = filteredList[randomIndex];
+    document.getElementById("unit-badge").textContent = currentQuestion.unit;
+
+    // 入力リセット
+    document.querySelectorAll('input[type="text"]').forEach(el => {
+      el.value = "";
+      el.disabled = false;
+    });
+    selectedGender = "";
+    document.querySelectorAll('.gender-btn').forEach(b => {
+      b.classList.remove('selected');
+      b.disabled = false;
+    });
+
+    if (mode === "vocab") {
+      isJaToDe = Math.random() < 0.5;
+      document.getElementById("direction-badge").textContent = isJaToDe ? "和独（日 → 独）" : "独和（独 → 日）";
+      document.getElementById("question-text").textContent = isJaToDe ? currentQuestion.japanese : currentQuestion.german;
+      document.getElementById("sub-hint").textContent = "";
+      const input = document.getElementById("vocab-answer");
+      input.focus();
+      activeInput = input;
+
+    } else if (mode === "noun") {
+      document.getElementById("direction-badge").textContent = "名詞（性・複数形）";
+      document.getElementById("question-text").textContent = currentQuestion.word;
+      document.getElementById("sub-hint").textContent = `意味: ${currentQuestion.japanese}`;
+      const input = document.getElementById("noun-plural");
+      input.focus();
+      activeInput = input;
+
+    } else if (mode === "verb") {
+      document.getElementById("direction-badge").textContent = "動詞（三基本形）";
+      document.getElementById("question-text").textContent = currentQuestion.infinitive;
+      document.getElementById("sub-hint").textContent = `意味: ${currentQuestion.japanese}`;
+      const input = document.getElementById("verb-past");
+      input.focus();
+      activeInput = input;
+    }
+  }
+
+  // 答え合わせ
+  function checkAnswer() {
+    const mode = document.getElementById("mode-select").value;
+    let isCorrect = false;
+    let feedbackHtml = "";
+
+    if (mode === "vocab") {
+      const ans = document.getElementById("vocab-answer").value.trim();
+      if (!ans) return;
+      const correctAns = isJaToDe ? currentQuestion.german : currentQuestion.japanese;
+      isCorrect = ans.toLowerCase() === correctAns.toLowerCase();
+      feedbackHtml = isCorrect
+        ? `⭕ 正解！ (${correctAns})`
+        : `❌ 不正解… 正解は: <strong>${correctAns}</strong>`;
+
+    } else if (mode === "noun") {
+      const pluralAns = document.getElementById("noun-plural").value.trim();
+      if (!selectedGender || !pluralAns) {
+        alert("定冠詞（der/die/das）の選択と、複数形の両方を入力してください。");
+        return;
+      }
+      const isArticleOk = selectedGender === currentQuestion.article;
+      const isPluralOk = pluralAns.toLowerCase() === currentQuestion.plural.toLowerCase();
+      isCorrect = isArticleOk && isPluralOk;
+      feedbackHtml = isCorrect
+        ? `⭕ 正解！ (${currentQuestion.full} / ${currentQuestion.plural})`
+        : `❌ 不正解…<br>正解: 単数 <strong>${currentQuestion.full}</strong> / 複数 <strong>${currentQuestion.plural}</strong>`;
+
+    } else if (mode === "verb") {
+      const pastAns = document.getElementById("verb-past").value.trim();
+      const partAns = document.getElementById("verb-participle").value.trim();
+      if (!pastAns || !partAns) {
+        alert("過去形と過去分詞形の両方を入力してください。");
+        return;
+      }
+      const isPastOk = pastAns.toLowerCase() === currentQuestion.past.toLowerCase();
+      const isPartOk = partAns.toLowerCase() === currentQuestion.participle.toLowerCase();
+      isCorrect = isPastOk && isPartOk;
+      feedbackHtml = isCorrect
+        ? `⭕ 正解！ (${currentQuestion.infinitive} - ${currentQuestion.past} - ${currentQuestion.participle})`
+        : `❌ 不正解…<br>正解: 過去形 <strong>${currentQuestion.past}</strong> / 過去分詞 <strong>${currentQuestion.participle}</strong>`;
+    }
+
+    totalCount++;
+    if (isCorrect) correctCount++;
+    updateStats();
+
+    const resultArea = document.getElementById("result-area");
+    resultArea.classList.remove("hidden", "correct", "incorrect");
+    resultArea.classList.add(isCorrect ? "correct" : "incorrect");
+    resultArea.innerHTML = feedbackHtml;
+
+    // 入力欄とボタンをロック
+    document.querySelectorAll('input[type="text"]').forEach(el => el.disabled = true);
+    document.querySelectorAll('.gender-btn').forEach(b => b.disabled = true);
+    document.getElementById("submit-btn").classList.add("hidden");
+    document.getElementById("next-btn").classList.remove("hidden");
+  }
+
+  function updateStats() {
+    document.getElementById("total-count").textContent = totalCount;
+    document.getElementById("correct-count").textContent = correctCount;
+    const rate = totalCount === 0 ? 0 : Math.round((correctCount / totalCount) * 100);
+    document.getElementById("accuracy").textContent = `${rate}%`;
+  }
+
+  // Enterキー操作（複数入力欄がある場合は次の入力欄へ移動、最後なら回答送信）
+  document.addEventListener("keypress", function(e) {
+    if (e.key === "Enter") {
+      if (!document.getElementById("next-btn").classList.contains("hidden")) {
+        nextQuestion();
+        return;
+      }
+      const mode = document.getElementById("mode-select").value;
+      if (mode === "verb" && document.activeElement.id === "verb-past") {
+        document.getElementById("verb-participle").focus();
+      } else {
+        checkAnswer();
+      }
+    }
+  });
+
+  init();
+</script>
+
+</body>
+</html>
