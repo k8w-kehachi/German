@@ -7,7 +7,7 @@
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      max-width: 560px;
+      max-width: 580px;
       margin: 24px auto;
       padding: 0 16px;
       background-color: #f5f7fa;
@@ -23,17 +23,51 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 10px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     select {
       width: 100%;
       padding: 10px;
-      font-size: 0.95rem;
+      font-size: 0.92rem;
       border: 2px solid #e2e8f0;
       border-radius: 8px;
       background-color: #fff;
       font-weight: bold;
       color: #1e293b;
+    }
+    .review-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 8px 12px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+    }
+    .review-toggle {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: bold;
+      color: #1e293b;
+      cursor: pointer;
+      user-select: none;
+    }
+    .clear-weak-btn {
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      font-weight: bold;
+      color: #b91c1c;
+      background-color: #fee2e2;
+      border: 1px solid #fecaca;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .clear-weak-btn:hover {
+      background-color: #fecaca;
     }
     .stats {
       display: flex;
@@ -57,6 +91,10 @@
     .badge-sub {
       background: #fef3c7;
       color: #92400e;
+    }
+    .badge-weak {
+      background: #fee2e2;
+      color: #991b1b;
     }
     .question {
       font-size: 1.5rem;
@@ -161,7 +199,7 @@
 <div class="card">
   <!-- モード＆Unit選択 -->
   <div class="controls">
-    <select id="mode-select" onchange="onFilterChange()">
+    <select id="mode-select" onchange="onModeChange()">
       <option value="vocab">単語（和独・独和ランダム）</option>
       <option value="noun">名詞（定冠詞・複数形）</option>
       <option value="verb">動詞（過去形・過去分詞）</option>
@@ -169,6 +207,15 @@
     <select id="unit-select" onchange="onFilterChange()">
       <option value="ALL">すべてのUnit</option>
     </select>
+  </div>
+
+  <!-- 苦手復習モードバー -->
+  <div class="review-bar">
+    <label class="review-toggle">
+      <input type="checkbox" id="weak-only-toggle" onchange="onFilterChange()">
+      <span>苦手復習モード（残り: <strong id="weak-count">0</strong>問）</span>
+    </label>
+    <button type="button" class="clear-weak-btn" onclick="clearWeakInCurrentMode()">このモードの苦手を解除</button>
   </div>
 
   <!-- 成績表示 -->
@@ -184,6 +231,7 @@
     <div>
       <span class="badge" id="unit-badge">Unit -</span>
       <span class="badge badge-sub" id="direction-badge">出題形式</span>
+      <span class="badge badge-weak hidden" id="weak-badge">苦手登録中</span>
     </div>
     <div class="question" id="question-text"></div>
     <div class="sub-hint" id="sub-hint"></div>
@@ -213,8 +261,8 @@
         <button type="button" class="gender-btn" onclick="selectGender('das', this)">das (中)</button>
       </div>
       <div class="input-group">
-        <label class="input-label" for="noun-plural">複数形（定冠詞 die を含めて入力）</label>
-        <input type="text" id="noun-plural" placeholder="例: die Äpfel" autocomplete="off">
+        <label class="input-label" for="noun-plural">複数形（定冠詞 die を含めて入力／複数形がなければ x）</label>
+        <input type="text" id="noun-plural" placeholder="例: die Äpfel（なければ x）" autocomplete="off">
       </div>
     </div>
 
@@ -241,6 +289,8 @@
   const WORDS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=0&single=true&output=csv";
   const VERBS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=2120875845&single=true&output=csv";
 
+  const STORAGE_KEY = "german_quiz_weak_items_v1";
+
   let allWords = [];
   let allNouns = [];
   let allVerbs = [];
@@ -254,6 +304,38 @@
   let totalCount = 0;
   let correctCount = 0;
 
+  // 苦手問題のIDセットをlocalStorageから復元
+  let weakIds = new Set(loadWeakIds());
+
+  function loadWeakIds() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function saveWeakIds() {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify([...weakIds]));
+    } catch (e) {
+      console.error("Failed to save weak items:", e);
+    }
+  }
+
+  // モードごとの一意キー生成
+  function getItemKey(mode, item) {
+    if (mode === "vocab") {
+      return `vocab::${item.unit}::${item.german}::${item.japanese}`;
+    }
+    if (mode === "noun") {
+      return `noun::${item.unit}::${item.full}::${item.plural}`;
+    }
+    return `verb::${item.unit}::${item.infinitive}::${item.past}::${item.participle}`;
+  }
+
   // フォーカスされているinputを記録（特殊文字ボタン用）
   document.querySelectorAll('input[type="text"]').forEach(input => {
     input.addEventListener('focus', () => activeInput = input);
@@ -262,7 +344,6 @@
   // カーソル位置にドイツ語特殊文字を挿入
   function insertChar(char) {
     if (!activeInput || activeInput.disabled) {
-      // 未選択時は表示中の最初のinputを対象にする
       const visibleInputs = Array.from(document.querySelectorAll('input[type="text"]'))
         .filter(el => el.offsetParent !== null && !el.disabled);
       if (visibleInputs.length > 0) activeInput = visibleInputs[0];
@@ -278,6 +359,7 @@
 
   // 名詞の定冠詞ボタン選択
   function selectGender(gender, btnElement) {
+    if (btnElement.disabled) return;
     selectedGender = gender;
     document.querySelectorAll('.gender-btn').forEach(b => b.classList.remove('selected'));
     btnElement.classList.add('selected');
@@ -307,7 +389,6 @@
       const wordsRows = parseCSV(await wordsRes.text());
       const verbsRows = parseCSV(await verbsRes.text());
 
-      // 単語データの整形
       allWords = wordsRows.map(c => ({
         german: c[0],
         japanese: c[1],
@@ -315,7 +396,7 @@
         unit: c[3] || "出典なし"
       }));
 
-      // 名詞データの抽出（der / die / das で始まり、複数形が登録されているもの）
+      // 名詞データの抽出（der / die / das で始まり、plural に何らかの指定があるもの ※ "x" も対象）
       allNouns = allWords
         .filter(w => /^(der|die|das)\s+/i.test(w.german) && w.plural !== "")
         .map(w => {
@@ -330,7 +411,6 @@
           };
         });
 
-      // 動詞データの整形
       allVerbs = verbsRows.map(c => ({
         infinitive: c[0],
         japanese: c[1],
@@ -343,6 +423,7 @@
       document.getElementById("quiz-area").classList.remove("hidden");
 
       updateUnitOptions();
+      updateWeakCountDisplay();
       onFilterChange();
     } catch (error) {
       document.getElementById("loading").textContent = "データの読み込みに失敗しました。2つのCSV URLを確認してください。";
@@ -350,7 +431,32 @@
     }
   }
 
-  // モードに応じてUnitドロップダウンの選択肢を更新
+  // 現在のモードの苦手数を更新
+  function updateWeakCountDisplay() {
+    const mode = document.getElementById("mode-select").value;
+    const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
+    const count = source.filter(item => weakIds.has(getItemKey(mode, item))).length;
+    document.getElementById("weak-count").textContent = count;
+  }
+
+  // 現在のモードに登録されている苦手を一括解除
+  function clearWeakInCurrentMode() {
+    const mode = document.getElementById("mode-select").value;
+    const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
+    source.forEach(item => weakIds.delete(getItemKey(mode, item)));
+    saveWeakIds();
+    updateWeakCountDisplay();
+    onFilterChange();
+  }
+
+  // モード変更時
+  function onModeChange() {
+    updateUnitOptions();
+    updateWeakCountDisplay();
+    onFilterChange();
+  }
+
+  // モードに応じてUnitドロップダウンを更新
   function updateUnitOptions() {
     const mode = document.getElementById("mode-select").value;
     const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
@@ -368,20 +474,24 @@
 
     if (units.includes(currentUnit)) {
       unitSelect.value = currentUnit;
+    } else {
+      unitSelect.value = "ALL";
     }
   }
 
-  // モードまたはUnit変更時の処理
+  // Unitまたは苦手復習モード変更時の絞り込み
   function onFilterChange() {
     const mode = document.getElementById("mode-select").value;
-    // モード切替時にUnit一覧も更新
-    updateUnitOptions();
     const selectedUnit = document.getElementById("unit-select").value;
+    const weakOnly = document.getElementById("weak-only-toggle").checked;
 
     const source = mode === "vocab" ? allWords : (mode === "noun" ? allNouns : allVerbs);
-    filteredList = selectedUnit === "ALL"
-      ? source
-      : source.filter(item => item.unit === selectedUnit);
+
+    filteredList = source.filter(item => {
+      const unitMatch = selectedUnit === "ALL" || item.unit === selectedUnit;
+      const weakMatch = !weakOnly || weakIds.has(getItemKey(mode, item));
+      return unitMatch && weakMatch;
+    });
 
     nextQuestion();
   }
@@ -389,8 +499,8 @@
   // 次の問題を出題
   function nextQuestion() {
     const mode = document.getElementById("mode-select").value;
+    const weakOnly = document.getElementById("weak-only-toggle").checked;
 
-    // 入力欄の表示切り替え
     document.getElementById("vocab-inputs").classList.toggle("hidden", mode !== "vocab");
     document.getElementById("noun-inputs").classList.toggle("hidden", mode !== "noun");
     document.getElementById("verb-inputs").classList.toggle("hidden", mode !== "verb");
@@ -400,9 +510,14 @@
 
     if (filteredList.length === 0) {
       document.getElementById("unit-badge").textContent = "-";
-      document.getElementById("direction-badge").textContent = "データなし";
-      document.getElementById("question-text").textContent = "該当する問題がありません";
-      document.getElementById("sub-hint").textContent = "スプレッドシートのデータまたはUnit選択を確認してください。";
+      document.getElementById("direction-badge").textContent = weakOnly ? "苦手なし" : "データなし";
+      document.getElementById("weak-badge").classList.add("hidden");
+      document.getElementById("question-text").textContent = weakOnly
+        ? "該当する苦手問題はありません"
+        : "該当する問題がありません";
+      document.getElementById("sub-hint").textContent = weakOnly
+        ? "すべて正解して苦手リストから外れたか、この条件の苦手問題がありません。"
+        : "スプレッドシートのデータまたはUnit選択を確認してください。";
       document.getElementById("submit-btn").classList.add("hidden");
       return;
     }
@@ -412,7 +527,9 @@
     currentQuestion = filteredList[randomIndex];
     document.getElementById("unit-badge").textContent = currentQuestion.unit;
 
-    // 入力リセット
+    const isWeak = weakIds.has(getItemKey(mode, currentQuestion));
+    document.getElementById("weak-badge").classList.toggle("hidden", !isWeak);
+
     document.querySelectorAll('input[type="text"]').forEach(el => {
       el.value = "";
       el.disabled = false;
@@ -452,6 +569,7 @@
 
   // 答え合わせ
   function checkAnswer() {
+    if (!currentQuestion) return;
     const mode = document.getElementById("mode-select").value;
     let isCorrect = false;
     let feedbackHtml = "";
@@ -468,7 +586,7 @@
     } else if (mode === "noun") {
       const pluralAns = document.getElementById("noun-plural").value.trim();
       if (!selectedGender || !pluralAns) {
-        alert("定冠詞（der/die/das）の選択と、複数形の両方を入力してください。");
+        alert("定冠詞（der/die/das）の選択と、複数形（なければ x）の両方を入力してください。");
         return;
       }
       const isArticleOk = selectedGender === currentQuestion.article;
@@ -493,6 +611,18 @@
         : `❌ 不正解…<br>正解: 過去形 <strong>${currentQuestion.past}</strong> / 過去分詞 <strong>${currentQuestion.participle}</strong>`;
     }
 
+    // 苦手リストの更新（間違えたら追加、正解したら解除）
+    const itemKey = getItemKey(mode, currentQuestion);
+    if (isCorrect) {
+      weakIds.delete(itemKey);
+      feedbackHtml += `<br><span style="font-size:0.85rem; opacity:0.85;">※苦手リストから解除されました</span>`;
+    } else {
+      weakIds.add(itemKey);
+      feedbackHtml += `<br><span style="font-size:0.85rem; opacity:0.85;">※苦手リストに自動登録されました</span>`;
+    }
+    saveWeakIds();
+    updateWeakCountDisplay();
+
     totalCount++;
     if (isCorrect) correctCount++;
     updateStats();
@@ -502,7 +632,6 @@
     resultArea.classList.add(isCorrect ? "correct" : "incorrect");
     resultArea.innerHTML = feedbackHtml;
 
-    // 入力欄とボタンをロック
     document.querySelectorAll('input[type="text"]').forEach(el => el.disabled = true);
     document.querySelectorAll('.gender-btn').forEach(b => b.disabled = true);
     document.getElementById("submit-btn").classList.add("hidden");
@@ -516,7 +645,7 @@
     document.getElementById("accuracy").textContent = `${rate}%`;
   }
 
-  // Enterキー操作（複数入力欄がある場合は次の入力欄へ移動、最後なら回答送信）
+  // Enterキー操作
   document.addEventListener("keypress", function(e) {
     if (e.key === "Enter") {
       if (!document.getElementById("next-btn").classList.contains("hidden")) {
