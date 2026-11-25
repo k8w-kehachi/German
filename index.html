@@ -277,7 +277,7 @@
   <div class="controls">
     <select id="mode-select" onchange="onModeChange()">
       <option value="vocab">単語（和独・独和ランダム）</option>
-      <option value="noun">名詞（定冠詞・複数形・pl.）</option>
+      <option value="noun">名詞（定冠詞・複数形）</option>
       <option value="verb">動詞（過去形・過去分詞）</option>
       <option value="idiom">熟語（和独・独和ランダム）</option>
       <option value="sentence">作文（和文独訳・複数行）</option>
@@ -342,8 +342,8 @@
         <button type="button" class="gender-btn" onclick="selectGender('das', this)">das (中)</button>
       </div>
       <div class="input-group">
-        <label class="input-label" for="noun-plural">複数形（定冠詞を含めて入力／複数形なしは x ／複数形のみは pl.）</label>
-        <input type="text" id="noun-plural" class="std-input" placeholder="例: die Äpfel / x / pl." autocomplete="off">
+        <label class="input-label" for="noun-plural">複数形（定冠詞を含めて入力／複数形なしは x）</label>
+        <input type="text" id="noun-plural" class="std-input" placeholder="例: die Äpfel（なければ x）" autocomplete="off">
       </div>
     </div>
 
@@ -375,7 +375,7 @@
   const IDIOMS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=590518933&single=true&output=csv";
   const SENTENCES_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=62088649&single=true&output=csv";
 
-  const STORAGE_KEY = "german_quiz_weak_items_v4";
+  const STORAGE_KEY = "german_quiz_weak_items_v5";
 
   let allWords = [];
   let allNouns = [];
@@ -525,11 +525,11 @@
           section: c[3] || "出典なし"
         }));
 
-      // 名詞抽出：der/die/das で始まり、plural が空欄でも "-" でもないもの（"x" と "pl." は対象）
+      // 名詞抽出：der/die/das で始まり、plural が空欄・"-"・"pl."（複数形のみの語）のいずれでもないもの
       allNouns = allWords
         .filter(w => {
           const p = w.plural.trim().toLowerCase();
-          return /^(der|die|das)\s+/i.test(w.german) && p !== "" && p !== "-";
+          return /^(der|die|das)\s+/i.test(w.german) && p !== "" && p !== "-" && p !== "pl." && p !== "pl";
         })
         .map(w => {
           const match = w.german.match(/^(der|die|das)\s+(.+)$/i);
@@ -605,7 +605,6 @@
     onFilterChange();
   }
 
-  // 同じプルダウン内に「全UNIT」「全KAPITEL」と個別項目を配置
   function updateSectionOptions() {
     const mode = document.getElementById("mode-select").value;
     const source = getSourceByMode(mode);
@@ -767,7 +766,7 @@
     } else if (mode === "noun") {
       document.getElementById("direction-badge").textContent = "名詞（性・複数形）";
       document.getElementById("question-text").textContent = currentQuestion.word;
-      document.getElementById("sub-hint").textContent = `意味: ${currentQuestion.japanese}（複数形なしは x ／複数形のみは pl.）`;
+      document.getElementById("sub-hint").textContent = `意味: ${currentQuestion.japanese}（複数形なしは x）`;
       const input = document.getElementById("noun-plural");
       input.focus();
       activeInput = input;
@@ -806,7 +805,7 @@
     } else if (mode === "noun") {
       const pluralAns = document.getElementById("noun-plural").value.trim();
       if (!selectedGender || !pluralAns) {
-        alert("定冠詞（der/die/das）の選択と、複数形（x または pl. も可）の両方を入力してください。");
+        alert("定冠詞（der/die/das）の選択と、複数形（なければ x）の両方を入力してください。");
         return;
       }
       const isArticleOk = selectedGender === currentQuestion.article;
