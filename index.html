@@ -21,7 +21,7 @@
     }
     .controls {
       display: grid;
-      grid-template-columns: 1.2fr 1fr 1fr;
+      grid-template-columns: 1.2fr 1fr;
       gap: 10px;
       margin-bottom: 12px;
     }
@@ -273,7 +273,7 @@
 <body>
 
 <div class="card">
-  <!-- モード / 全UNIT / 全KAPITEL 選択 -->
+  <!-- モード / 全UNIT・全KAPITEL 共通プルダウン -->
   <div class="controls">
     <select id="mode-select" onchange="onModeChange()">
       <option value="vocab">単語（和独・独和ランダム）</option>
@@ -283,12 +283,8 @@
       <option value="sentence">作文（和文独訳・複数行）</option>
     </select>
 
-    <select id="unit-select" onchange="onSectionChange('unit')">
-      <option value="ALL">全UNIT</option>
-    </select>
-
-    <select id="kapitel-select" onchange="onSectionChange('kapitel')">
-      <option value="ALL">全KAPITEL</option>
+    <select id="section-select" onchange="onFilterChange()">
+      <option value="ALL">全UNIT・全KAPITEL</option>
     </select>
   </div>
 
@@ -377,7 +373,7 @@
   const IDIOMS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=590518933&single=true&output=csv";
   const SENTENCES_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=62088649&single=true&output=csv";
 
-  const STORAGE_KEY = "german_quiz_weak_items_v2";
+  const STORAGE_KEY = "german_quiz_weak_items_v3";
 
   let allWords = [];
   let allNouns = [];
@@ -455,14 +451,6 @@
       }
     }
     return rows;
-  }
-
-  // UNIT / KAPITEL 判定ヘルパー
-  function isUnitSection(sec) {
-    return /^unit\b/i.test(sec || "");
-  }
-  function isKapitelSection(sec) {
-    return /^kapitel\b/i.test(sec || "");
   }
 
   // 作文行データを「名前」単位でグルーピング
@@ -607,67 +595,37 @@
     onFilterChange();
   }
 
-  // 全UNIT / 全KAPITEL の選択肢を更新
+  // 全UNIT・全KAPITEL を同じプルダウンに表示
   function updateSectionOptions() {
     const mode = document.getElementById("mode-select").value;
     const source = getSourceByMode(mode);
-    const sections = [...new Set(source.map(item => item.section))];
+    const sections = [...new Set(source.map(item => item.section))].sort((a, b) =>
+      a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" })
+    );
 
-    const units = sections.filter(s => isUnitSection(s)).sort();
-    const kapitels = sections.filter(s => isKapitelSection(s)).sort();
+    const sectionSelect = document.getElementById("section-select");
+    const prevSection = sectionSelect.value;
 
-    const unitSelect = document.getElementById("unit-select");
-    const kapitelSelect = document.getElementById("kapitel-select");
-
-    const prevUnit = unitSelect.value;
-    const prevKapitel = kapitelSelect.value;
-
-    unitSelect.innerHTML = '<option value="ALL">全UNIT</option>';
-    units.forEach(u => {
+    sectionSelect.innerHTML = '<option value="ALL">全UNIT・全KAPITEL</option>';
+    sections.forEach(sec => {
       const opt = document.createElement("option");
-      opt.value = u;
-      opt.textContent = u;
-      unitSelect.appendChild(opt);
+      opt.value = sec;
+      opt.textContent = sec;
+      sectionSelect.appendChild(opt);
     });
-    unitSelect.value = units.includes(prevUnit) ? prevUnit : "ALL";
 
-    kapitelSelect.innerHTML = '<option value="ALL">全KAPITEL</option>';
-    kapitels.forEach(k => {
-      const opt = document.createElement("option");
-      opt.value = k;
-      opt.textContent = k;
-      kapitelSelect.appendChild(opt);
-    });
-    kapitelSelect.value = kapitels.includes(prevKapitel) ? prevKapitel : "ALL";
-  }
-
-  // UNIT と KAPITEL は排他的に絞り込みやすくする
-  function onSectionChange(changedType) {
-    const unitSelect = document.getElementById("unit-select");
-    const kapitelSelect = document.getElementById("kapitel-select");
-    if (changedType === "unit" && unitSelect.value !== "ALL") {
-      kapitelSelect.value = "ALL";
-    } else if (changedType === "kapitel" && kapitelSelect.value !== "ALL") {
-      unitSelect.value = "ALL";
-    }
-    onFilterChange();
+    sectionSelect.value = sections.includes(prevSection) ? prevSection : "ALL";
   }
 
   function onFilterChange() {
     const mode = document.getElementById("mode-select").value;
-    const selectedUnit = document.getElementById("unit-select").value;
-    const selectedKapitel = document.getElementById("kapitel-select").value;
+    const selectedSection = document.getElementById("section-select").value;
     const weakOnly = document.getElementById("weak-only-toggle").checked;
 
     const source = getSourceByMode(mode);
 
     filteredList = source.filter(item => {
-      let sectionMatch = true;
-      if (selectedUnit !== "ALL") {
-        sectionMatch = item.section === selectedUnit;
-      } else if (selectedKapitel !== "ALL") {
-        sectionMatch = item.section === selectedKapitel;
-      }
+      const sectionMatch = selectedSection === "ALL" || item.section === selectedSection;
       const weakMatch = !weakOnly || weakIds.has(getItemKey(mode, item));
       return sectionMatch && weakMatch;
     });
