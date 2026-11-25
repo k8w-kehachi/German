@@ -273,7 +273,7 @@
 <body>
 
 <div class="card">
-  <!-- モード / 全UNIT・全KAPITEL 共通プルダウン -->
+  <!-- モード / 範囲（全UNIT・全KAPITEL・個別）選択 -->
   <div class="controls">
     <select id="mode-select" onchange="onModeChange()">
       <option value="vocab">単語（和独・独和ランダム）</option>
@@ -284,7 +284,9 @@
     </select>
 
     <select id="section-select" onchange="onFilterChange()">
-      <option value="ALL">全UNIT・全KAPITEL</option>
+      <option value="ALL">すべて</option>
+      <option value="ALL_UNITS">全UNIT</option>
+      <option value="ALL_KAPITELS">全KAPITEL</option>
     </select>
   </div>
 
@@ -373,7 +375,7 @@
   const IDIOMS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=590518933&single=true&output=csv";
   const SENTENCES_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTwhflN-2AFyOH-WV7CN0mx1L7ZtOvgAGov8YHbAKbRIowmsQhFY3zEB1Wvkaf3fJQdOriPNEDEAc7E/pub?gid=62088649&single=true&output=csv";
 
-  const STORAGE_KEY = "german_quiz_weak_items_v3";
+  const STORAGE_KEY = "german_quiz_weak_items_v4";
 
   let allWords = [];
   let allNouns = [];
@@ -451,6 +453,14 @@
       }
     }
     return rows;
+  }
+
+  function isUnitSection(sec) {
+    return /^unit\b/i.test(sec || "");
+  }
+
+  function isKapitelSection(sec) {
+    return /^kapitel\b/i.test(sec || "");
   }
 
   // 作文行データを「名前」単位でグルーピング
@@ -595,26 +605,45 @@
     onFilterChange();
   }
 
-  // 全UNIT・全KAPITEL を同じプルダウンに表示
+  // 同じプルダウン内に「全UNIT」「全KAPITEL」と個別項目を配置
   function updateSectionOptions() {
     const mode = document.getElementById("mode-select").value;
     const source = getSourceByMode(mode);
-    const sections = [...new Set(source.map(item => item.section))].sort((a, b) =>
+    const sections = [...new Set(source.map(item => item.section))];
+
+    const units = sections.filter(s => isUnitSection(s)).sort((a, b) =>
+      a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" })
+    );
+    const kapitels = sections.filter(s => isKapitelSection(s)).sort((a, b) =>
+      a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" })
+    );
+    const others = sections.filter(s => !isUnitSection(s) && !isKapitelSection(s)).sort((a, b) =>
       a.localeCompare(b, "ja", { numeric: true, sensitivity: "base" })
     );
 
     const sectionSelect = document.getElementById("section-select");
-    const prevSection = sectionSelect.value;
+    const prevValue = sectionSelect.value;
 
-    sectionSelect.innerHTML = '<option value="ALL">全UNIT・全KAPITEL</option>';
-    sections.forEach(sec => {
-      const opt = document.createElement("option");
-      opt.value = sec;
-      opt.textContent = sec;
-      sectionSelect.appendChild(opt);
+    const validValues = new Set(["ALL", "ALL_UNITS", "ALL_KAPITELS", ...sections]);
+
+    let html = `
+      <option value="ALL">すべて</option>
+      <option value="ALL_UNITS">全UNIT</option>
+      <option value="ALL_KAPITELS">全KAPITEL</option>
+    `;
+
+    units.forEach(u => {
+      html += `<option value="${escapeHtml(u)}">${escapeHtml(u)}</option>`;
+    });
+    kapitels.forEach(k => {
+      html += `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`;
+    });
+    others.forEach(o => {
+      html += `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`;
     });
 
-    sectionSelect.value = sections.includes(prevSection) ? prevSection : "ALL";
+    sectionSelect.innerHTML = html;
+    sectionSelect.value = validValues.has(prevValue) ? prevValue : "ALL";
   }
 
   function onFilterChange() {
@@ -625,7 +654,17 @@
     const source = getSourceByMode(mode);
 
     filteredList = source.filter(item => {
-      const sectionMatch = selectedSection === "ALL" || item.section === selectedSection;
+      let sectionMatch = false;
+      if (selectedSection === "ALL") {
+        sectionMatch = true;
+      } else if (selectedSection === "ALL_UNITS") {
+        sectionMatch = isUnitSection(item.section);
+      } else if (selectedSection === "ALL_KAPITELS") {
+        sectionMatch = isKapitelSection(item.section);
+      } else {
+        sectionMatch = item.section === selectedSection;
+      }
+
       const weakMatch = !weakOnly || weakIds.has(getItemKey(mode, item));
       return sectionMatch && weakMatch;
     });
@@ -662,7 +701,7 @@
   }
 
   function escapeHtml(str) {
-    return str
+    return String(str)
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
@@ -690,7 +729,7 @@
         : "該当する問題がありません";
       document.getElementById("sub-hint").textContent = weakOnly
         ? "すべて正解して苦手リストから外れたか、この条件の苦手問題がありません。"
-        : "スプレッドシートのデータまたはUNIT・KAPITEL選択を確認してください。";
+        : "スプレッドシートのデータまたは範囲選択を確認してください。";
       document.getElementById("submit-btn").classList.add("hidden");
       return;
     }
